@@ -59,7 +59,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 
 ---
 
-**Query #1 What is the total amount each customer spent at the restaurant?**
+**Query #1**
 
     SELECT s.customer_id, Sum(m.price) AS total_price
     FROM dannys_diner.sales AS s 
@@ -74,11 +74,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | C           | 36          |
 
 ---
-
-[View on DB Fiddle](https://www.db-fiddle.com/f/2rM8RAnq7h5LLDTzZiRWcd/138)
----
-
-**Query #2How many days has each customer visited the restaurant?**
+**Query #2**
 
     SELECT customer_id, count (distinct order_date)
     FROM dannys_diner.sales  
