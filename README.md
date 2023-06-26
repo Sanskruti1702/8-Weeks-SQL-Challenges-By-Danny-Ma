@@ -62,10 +62,10 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 **Query #1**
 
     SELECT s.customer_id, Sum(m.price) AS total_price
-    FROM dannys_diner.sales AS s 
-    JOIN dannys_diner.menu AS m ON s.product_id=m.product_id
-    GROUP BY s.customer_id
-    ORDER BY s.customer_id ASC;
+        FROM dannys_diner.sales AS s 
+        JOIN dannys_diner.menu AS m ON s.product_id=m.product_id
+        GROUP BY s.customer_id
+        ORDER BY s.customer_id ASC;
 
 | customer_id | total_price |
 | ----------- | ----------- |
@@ -87,5 +87,78 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | C           | 2     |
 
 ---
+**Query #3**
 
-[View on DB Fiddle](https://www.db-fiddle.com/f/2rM8RAnq7h5LLDTzZiRWcd/138)
+    WITH ordered_sales AS (
+      SELECT 
+        sales.customer_id, 
+        sales.order_date, 
+        menu.product_name,
+        DENSE_RANK() OVER (
+          PARTITION BY sales.customer_id 
+          ORDER BY sales.order_date) AS rank
+      FROM dannys_diner.sales
+      INNER JOIN dannys_diner.menu
+        ON sales.product_id = menu.product_id
+    )
+    
+    SELECT 
+      customer_id, 
+      product_name
+    FROM ordered_sales
+    WHERE rank = 1
+    GROUP BY customer_id, product_name;
+
+| customer_id | product_name |
+| ----------- | ------------ |
+| A           | curry        |
+| A           | sushi        |
+| B           | curry        |
+| C           | ramen        |
+
+---
+**Query #4**
+
+    SELECT menu.product_name, COUNT(sales.product_id) AS most_purchased_item
+    FROM dannys_diner.sales 
+    JOIN dannys_diner.menu  ON sales.product_id=menu.product_id
+    GROUP BY menu.product_name
+    ORDER BY most_purchased_item DESC
+    LIMIT 1;
+
+| product_name | most_purchased_item |
+| ------------ | ------------------- |
+| ramen        | 8                   |
+
+---
+**Query #5**
+
+    WITH most_popular_sales AS (
+      SELECT 
+        sales.customer_id, menu.product_name,
+        COUNT (menu.product_id) AS order_count,
+        DENSE_RANK() OVER (
+          PARTITION BY sales.customer_id 
+          ORDER BY COUNT(sales.customer_id) DESC) AS rank
+      FROM dannys_diner.sales
+      INNER JOIN dannys_diner.menu
+        ON sales.product_id = menu.product_id
+      GROUP BY sales.customer_id,menu.product_name
+    )
+    
+    SELECT 
+      customer_id,product_name,order_count  
+    FROM most_popular_sales
+    WHERE Rank=1;
+
+| customer_id | product_name | order_count |
+| ----------- | ------------ | ----------- |
+| A           | ramen        | 3           |
+| B           | ramen        | 2           |
+| B           | curry        | 2           |
+| B           | sushi        | 2           |
+| C           | ramen        | 3           |
+
+---
+
+[View on DB Fiddle](https://www.db-fiddle.com/f/2rM8RAnq7h5LLDTzZiRWcd/4778)
