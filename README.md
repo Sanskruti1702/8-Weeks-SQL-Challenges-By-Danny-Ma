@@ -59,7 +59,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 
 ---
 
-**Query #1**
+**Query #1** What is the total amount each customer spent at the restaurant?
 
     SELECT s.customer_id, Sum(m.price) AS total_price
         FROM dannys_diner.sales AS s 
@@ -74,7 +74,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | C           | 36          |
 
 ---
-**Query #2**
+**Query #2** How many days has each customer visited the restaurant?
 
     SELECT customer_id, count (distinct order_date)
     FROM dannys_diner.sales  
@@ -87,7 +87,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | C           | 2     |
 
 ---
-**Query #3**
+**Query #3** What was the first item from the menu purchased by each customer?
 
     WITH ordered_sales AS (
       SELECT 
@@ -117,7 +117,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | C           | ramen        |
 
 ---
-**Query #4**
+**Query #4** What is the most purchased item on the menu and how many times was it purchased by all customers?
 
     SELECT menu.product_name, COUNT(sales.product_id) AS most_purchased_item
     FROM dannys_diner.sales 
@@ -131,7 +131,7 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | ramen        | 8                   |
 
 ---
-**Query #5**
+**Query #5** Which item was the most popular for each customer?
 
     WITH most_popular_sales AS (
       SELECT 
@@ -158,6 +158,90 @@ Please refer [here](https://8weeksqlchallenge.com/case-study-1/) to view the com
 | B           | curry        | 2           |
 | B           | sushi        | 2           |
 | C           | ramen        | 3           |
+
+---
+**Query #6** Which item was purchased just before the customer became a member?
+
+    WITH orders_by_members AS(
+      SELECT sales.product_id,members.customer_id,
+      ROW_NUMBER() OVER (
+        PARTITION BY members.customer_id
+        ORDER BY sales.order_date) AS row_num
+      FROM dannys_diner.sales
+      JOIN dannys_diner.members ON sales.customer_id=members.customer_id
+          AND sales.order_date>members.join_date)
+    SELECT customer_id,product_name
+    FROM orders_by_members
+    JOIN dannys_diner.menu ON orders_by_members.product_id=menu.product_id
+    WHERE row_num=1
+    ORDER BY customer_id ASC ;
+
+| customer_id | product_name |
+| ----------- | ------------ |
+| A           | ramen        |
+| B           | sushi        |
+
+---
+**Query #7** What is the total items and amount spent for each member before they became a member?
+
+    WITH orders_by_members AS(
+      SELECT sales.product_id,members.customer_id,
+      ROW_NUMBER() OVER (
+        PARTITION BY members.customer_id
+        ORDER BY sales.order_date DESC) AS row_num
+      FROM dannys_diner.sales
+      JOIN dannys_diner.members ON sales.customer_id=members.customer_id
+          AND sales.order_date<members.join_date)
+    SELECT customer_id,product_name
+    FROM orders_by_members
+    JOIN dannys_diner.menu ON orders_by_members.product_id=menu.product_id
+    WHERE row_num=1
+    ORDER BY customer_id ASC ;
+
+| customer_id | product_name |
+| ----------- | ------------ |
+| A           | sushi        |
+| B           | sushi        |
+
+---
+**Query #8**  What is the total items and amount spent for each member before they became a member?
+
+    SELECT sales.customer_id,
+           COUNT(sales.product_id)AS total_items,
+           SUM(menu.price) AS total_sales 
+    FROM dannys_diner.sales 
+    INNER JOIN dannys_diner.members 
+      ON sales.customer_id=members.customer_id
+      AND sales.order_date < members.join_date
+    INNER JOIN dannys_diner.menu 
+      ON sales.product_id=menu.product_id
+    GROUP BY sales.customer_id
+    ORDER BY sales.customer_id;
+
+| customer_id | total_items | total_sales |
+| ----------- | ----------- | ----------- |
+| A           | 2           | 25          |
+| B           | 3           | 40          |
+
+---
+**Query #9** If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
+
+    WITH total_pints_cte AS(
+      SELECT menu.product_id,
+      CASE WHEN product_id=1 THEN price*20
+      ELSE price*10 END AS total_points
+      FROM dannys_diner.menu )
+    SELECT sales.customer_id,SUM (total_pints_cte.total_points) as points
+    FROM dannys_diner.sales
+    JOIN total_pints_cte ON sales.product_id=total_pints_cte.product_id
+    GROUP BY sales.customer_id
+    ORDER BY sales.customer_id;
+
+| customer_id | points |
+| ----------- | ------ |
+| A           | 860    |
+| B           | 940    |
+| C           | 360    |
 
 ---
 
