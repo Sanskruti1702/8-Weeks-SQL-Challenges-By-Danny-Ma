@@ -39,3 +39,280 @@ ref : events.page_id > page_hierarchy.page_id
 ref: event_identifier.event_type < events.event_type
 
 
+
+**Query #1**
+
+    SELECT * FROM clique_bait.events LIMIT 10;
+
+| visit_id | cookie_id | page_id | event_type | sequence_number | event_time               |
+| -------- | --------- | ------- | ---------- | --------------- | ------------------------ |
+| ccf365   | c4ca42    | 1       | 1          | 1               | 2020-02-04T19:16:09.182Z |
+| ccf365   | c4ca42    | 2       | 1          | 2               | 2020-02-04T19:16:17.358Z |
+| ccf365   | c4ca42    | 6       | 1          | 3               | 2020-02-04T19:16:58.454Z |
+| ccf365   | c4ca42    | 9       | 1          | 4               | 2020-02-04T19:16:58.609Z |
+| ccf365   | c4ca42    | 9       | 2          | 5               | 2020-02-04T19:17:51.729Z |
+| ccf365   | c4ca42    | 10      | 1          | 6               | 2020-02-04T19:18:11.605Z |
+| ccf365   | c4ca42    | 10      | 2          | 7               | 2020-02-04T19:19:10.570Z |
+| ccf365   | c4ca42    | 11      | 1          | 8               | 2020-02-04T19:19:46.911Z |
+| ccf365   | c4ca42    | 11      | 2          | 9               | 2020-02-04T19:20:45.274Z |
+| ccf365   | c4ca42    | 12      | 1          | 10              | 2020-02-04T19:20:52.307Z |
+
+---
+**Query #2**
+
+    select count(distinct(user_id)) as number_of_users
+    from clique_bait.users;
+
+| number_of_users |
+| --------------- |
+| 500             |
+
+---
+**Query #3**
+
+    with cte as (select user_id, count(cookie_id) as cookie_count
+                 from clique_bait.users
+                 group by user_id)
+    select round(avg(cookie_count),0) as avg_cookies
+    from cte;
+
+| avg_cookies |
+| ----------- |
+| 4           |
+
+---
+**Query #4**
+
+    select extract(month from event_time) as month,count(distinct(visit_id)) as visit_count
+    from clique_bait.events
+    group by month;
+
+| month | visit_count |
+| ----- | ----------- |
+| 1     | 876         |
+| 2     | 1488        |
+| 3     | 916         |
+| 4     | 248         |
+| 5     | 36          |
+
+---
+**Query #5**
+
+    select event_type, count(*) as count
+    from clique_bait.events
+    group by event_type
+    order by event_type;
+
+| event_type | count |
+| ---------- | ----- |
+| 1          | 20928 |
+| 2          | 8451  |
+| 3          | 1777  |
+| 4          | 876   |
+| 5          | 702   |
+
+---
+**Query #6**
+
+    SELECT 
+      100 * COUNT(DISTINCT e.visit_id)/
+        (SELECT COUNT(DISTINCT visit_id) FROM clique_bait.events) AS       percentage_purchase
+    from clique_bait.events as e
+    join clique_bait.event_identifier as ei on e.event_type= ei.event_type
+    where event_name='Purchase';
+
+| percentage_purchase |
+| ------------------- |
+| 49                  |
+
+---
+**Query #7**
+
+    select  100 * COUNT(DISTINCT e.visit_id)/
+        (SELECT COUNT(DISTINCT visit_id) FROM clique_bait.events) AS percentage
+    from clique_bait.events as e
+    join clique_bait.event_identifier as ei on e.event_type= ei.event_type
+    join clique_bait.page_hierarchy as ph on e.page_id=ph.page_id
+    where event_name<>'Purchase' AND page_name= 'Checkout';
+
+| percentage |
+| ---------- |
+| 59         |
+
+---
+**Query #8**
+
+    select page_name,count(visit_id) as view_count
+    from clique_bait.events as e
+    join clique_bait.event_identifier as ei on e.event_type= ei.event_type
+    join clique_bait.page_hierarchy as ph on e.page_id=ph.page_id
+    where event_name='Page View'
+    group by ph.page_name
+    order by view_count desc
+    limit 3;
+
+| page_name    | view_count |
+| ------------ | ---------- |
+| All Products | 3174       |
+| Checkout     | 2103       |
+| Home Page    | 1782       |
+
+---
+**Query #9**
+
+    select product_category, 
+      SUM(CASE WHEN ei.event_name = 'Page View' THEN 1 ELSE 0 END) AS page_views,
+      SUM(CASE WHEN ei.event_name = 'Add to Cart' THEN 1 ELSE 0 END) AS cart_adds
+    from clique_bait.events as e
+    join clique_bait.event_identifier as ei on e.event_type= ei.event_type
+    join clique_bait.page_hierarchy as ph on e.page_id=ph.page_id
+    where ph.product_category is not null  
+    group by ph.product_category
+    order by ph.product_category;
+
+| product_category | page_views | cart_adds |
+| ---------------- | ---------- | --------- |
+| Fish             | 4633       | 2789      |
+| Luxury           | 3032       | 1870      |
+| Shellfish        | 6204       | 3792      |
+
+---
+**Query #10**
+
+    WITH cte1 AS ( 
+      SELECT 
+        e.visit_id,
+        ph.product_id,
+        ph.page_name AS product_name,
+        ph.product_category,
+        SUM(CASE WHEN e.event_type = 1 THEN 1 ELSE 0 END) AS page_views,
+        SUM(CASE WHEN e.event_type = 2 THEN 1 ELSE 0 END) AS cart_adds 
+      FROM clique_bait.events AS e
+      JOIN clique_bait.page_hierarchy AS ph
+        ON e.page_id = ph.page_id
+      WHERE product_id IS NOT NULL
+      GROUP BY e.visit_id, ph.product_id, ph.page_name, ph.product_category
+    ),
+    cte2 AS ( 
+      SELECT 
+        DISTINCT visit_id
+      FROM clique_bait.events
+      WHERE event_type = 3 
+    ),
+    cte3 AS ( 
+      SELECT 
+        cte1.visit_id, 
+        cte1.product_id, 
+        cte1.product_name, 
+        cte1.product_category, 
+        cte1.page_views, 
+        cte1.cart_adds,
+        CASE WHEN cte2.visit_id IS NOT NULL THEN 1 ELSE 0 END AS purchase
+      FROM cte1 
+      LEFT JOIN cte2 
+        ON cte1.visit_id = cte2.visit_id
+    ),
+    cte4 AS (
+      SELECT product_id,
+        product_name, 
+        product_category, 
+        SUM(page_views) AS views,
+        SUM(cart_adds) AS cart_adds, 
+        SUM(CASE WHEN cart_adds = 1 AND purchase = 0 THEN 1 ELSE 0 END) AS abandoned,
+        SUM(CASE WHEN cart_adds = 1 AND purchase = 1 THEN 1 ELSE 0 END) AS purchases
+      FROM cte3
+      GROUP BY product_id, product_name, product_category)
+    
+    SELECT *
+    FROM cte4
+    ORDER BY product_id;
+
+| product_id | product_name   | product_category | views | cart_adds | abandoned | purchases |
+| ---------- | -------------- | ---------------- | ----- | --------- | --------- | --------- |
+| 1          | Salmon         | Fish             | 1559  | 938       | 227       | 711       |
+| 2          | Kingfish       | Fish             | 1559  | 920       | 213       | 707       |
+| 3          | Tuna           | Fish             | 1515  | 931       | 234       | 697       |
+| 4          | Russian Caviar | Luxury           | 1563  | 946       | 249       | 697       |
+| 5          | Black Truffle  | Luxury           | 1469  | 924       | 217       | 707       |
+| 6          | Abalone        | Shellfish        | 1525  | 932       | 233       | 699       |
+| 7          | Lobster        | Shellfish        | 1547  | 968       | 214       | 754       |
+| 8          | Crab           | Shellfish        | 1564  | 949       | 230       | 719       |
+| 9          | Oyster         | Shellfish        | 1568  | 943       | 217       | 726       |
+
+---
+**Query #11**
+
+    WITH cte1 AS ( 
+      SELECT 
+        e.visit_id,
+        ph.product_id,
+        ph.page_name AS product_name,
+        ph.product_category,
+        SUM(CASE WHEN e.event_type = 1 THEN 1 ELSE 0 END) AS page_views,
+        SUM(CASE WHEN e.event_type = 2 THEN 1 ELSE 0 END) AS cart_adds 
+      FROM clique_bait.events AS e
+      JOIN clique_bait.page_hierarchy AS ph
+        ON e.page_id = ph.page_id
+      WHERE product_id IS NOT NULL
+      GROUP BY e.visit_id, ph.product_id, ph.page_name, ph.product_category
+    ),
+    cte2 AS ( 
+      SELECT 
+        DISTINCT visit_id
+      FROM clique_bait.events
+      WHERE event_type = 3 
+    ),
+    cte3 AS ( 
+      SELECT 
+        cte1.visit_id, 
+        cte1.product_id, 
+        cte1.product_name, 
+        cte1.product_category, 
+        cte1.page_views, 
+        cte1.cart_adds,
+        CASE WHEN cte2.visit_id IS NOT NULL THEN 1 ELSE 0 END AS purchase
+      FROM cte1 
+      LEFT JOIN cte2 
+        ON cte1.visit_id = cte2.visit_id
+    ),
+    cte4 AS (
+      SELECT 
+        product_category, 
+        SUM(page_views) AS views,
+        SUM(cart_adds) AS cart_adds, 
+        SUM(CASE WHEN cart_adds = 1 AND purchase = 0 THEN 1 ELSE 0 END) AS abandoned,
+        SUM(CASE WHEN cart_adds = 1 AND purchase = 1 THEN 1 ELSE 0 END) AS purchases
+      FROM cte3
+      GROUP BY product_category)
+    
+    SELECT *
+    FROM cte4;
+
+| product_category | views | cart_adds | abandoned | purchases |
+| ---------------- | ----- | --------- | --------- | --------- |
+| Luxury           | 3032  | 1870      | 466       | 1404      |
+| Shellfish        | 6204  | 3792      | 894       | 2898      |
+| Fish             | 4633  | 2789      | 674       | 2115      |
+
+
+select 
+  u.user_id, e.visit_id, 
+  min(e.event_time) as visit_start_time,
+  sum(case when e.event_type = 1 then 1 else 0 end) as page_views,
+  sum(case when e.event_type = 2 then 1 else 0 end) as cart_adds,
+  sum(case when e.event_type = 3 then 1 else 0 end) as purchase,
+  c.campaign_name,
+  sum(case when e.event_type = 4 then 1 else 0 end) as impression, 
+  sum(case when e.event_type = 5 then 1 else 0 end) as click
+from clique_bait.users as u
+join clique_bait.events as e
+  ON u.cookie_id = e.cookie_id
+left join clique_bait.campaign_identifier as c
+  ON e.event_time between c.start_date and c.end_date
+left join clique_bait.page_hierarchy as p
+  ON e.page_id = p.page_id
+group by u.user_id, e.visit_id, c.campaign_name;
+
+
+
+
