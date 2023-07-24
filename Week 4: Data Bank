@@ -1,0 +1,136 @@
+**Query #1**
+
+    SELECT COUNT(DISTINCT node_id) as count_of_nodes
+    FROM data_bank.customer_nodes;
+
+| count_of_nodes |
+| -------------- |
+| 5              |
+
+---
+**Query #2**
+
+    SELECT region_id, COUNT(DISTINCT node_id) as nodes
+    FROM data_bank.customer_nodes
+    GROUP BY region_id;
+
+| region_id | nodes |
+| --------- | ----- |
+| 1         | 5     |
+| 2         | 5     |
+| 3         | 5     |
+| 4         | 5     |
+| 5         | 5     |
+
+---
+**Query #3**
+
+    SELECT region_id,COUNT(DISTINCT customer_id) AS customer_count
+    FROM data_bank.customer_nodes
+    GROUP BY region_id;
+
+| region_id | customer_count |
+| --------- | -------------- |
+| 1         | 110            |
+| 2         | 105            |
+| 3         | 102            |
+| 4         | 95             |
+| 5         | 88             |
+
+---
+**Query #4**
+
+    WITH days_in_a_node AS (
+      SELECT customer_id, node_id,end_date - start_date AS days_in_node
+      FROM data_bank.customer_nodes
+      WHERE end_date <> '9999-12-31'
+      GROUP BY customer_id, node_id, start_date, end_date
+    ) ,
+     total_node_days AS (
+      SELECT customer_id,node_id,SUM(days_in_node) AS total_days
+      FROM days_in_a_node
+      GROUP BY customer_id, node_id
+    )
+    SELECT ROUND(AVG(total_days)) AS avg_node_reallocation_days
+    FROM total_node_days;
+
+| avg_node_reallocation_days |
+| -------------------------- |
+| 24                         |
+
+---
+**Query #5**
+
+    WITH days_in_a_node AS (
+      SELECT customer_id, node_id,end_date - start_date AS days_in_node
+      FROM data_bank.customer_nodes
+      WHERE end_date <> '9999-12-31'
+      GROUP BY customer_id, node_id, start_date, end_date
+    ) ,
+     total_node_days AS (
+      SELECT customer_id,node_id,SUM(days_in_node) AS total_days
+      FROM days_in_a_node
+      GROUP BY customer_id, node_id
+    )
+    SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total_days) AS median,
+    PERCENTILE_CONT(0.8) WITHIN GROUP (ORDER BY total_days) AS median_80th,
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY total_days) AS median_95th
+    FROM total_node_days;
+
+| median | median_80th | median_95th |
+| ------ | ----------- | ----------- |
+| 22     | 34          | 52          |
+
+---
+**Query #6**
+
+    SELECT txn_type, COUNT (customer_id) as count,SUM(txn_amount) AS total_amount
+    FROM data_bank.customer_transactions
+    GROUP BY txn_type;
+
+| txn_type   | count | total_amount |
+| ---------- | ----- | ------------ |
+| purchase   | 1617  | 806537       |
+| deposit    | 2671  | 1359168      |
+| withdrawal | 1580  | 793003       |
+
+---
+**Query #7**
+
+    WITH cte AS(
+      SELECT customer_id,COUNT(customer_id) as count,SUM(txn_amount) AS total_amount
+    FROM data_bank.customer_transactions
+    WHERE txn_type='deposit' 
+    GROUP BY customer_id
+    ORDER BY customer_id)
+    SELECT ROUND(AVG(count)) as avg_count_of_deposits,ROUND(AVG(total_amount)) AS avg_txn_amount
+    FROM cte;
+
+| avg_count_of_deposits | avg_txn_amount |
+| --------------------- | -------------- |
+| 5                     | 2718           |
+
+---
+**Query #8**
+
+    WITH monthly_transactions AS (
+      SELECT customer_id, DATE_PART('month', txn_date) AS month,
+        SUM(CASE WHEN txn_type = 'deposit' THEN 1 ELSE 0 END) AS deposit_count,
+        SUM(CASE WHEN txn_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_count,
+        SUM(CASE WHEN txn_type = 'withdrawal' THEN 1 ELSE 0 END) AS withdrawal_count
+      FROM data_bank.customer_transactions
+      GROUP BY  customer_id,DATE_PART('month', txn_date))
+     SELECT month, COUNT(customer_id)
+     FROM monthly_transactions
+     WHERE deposit_count>1 AND (withdrawal_count>1 OR purchase_count>1)
+     GROUP BY month
+     ORDER BY month;
+
+| month | count |
+| ----- | ----- |
+| 1     | 88    |
+| 2     | 115   |
+| 3     | 137   |
+| 4     | 40    |
+
+---
