@@ -1,0 +1,19 @@
+/*ALTER TABLE fresh_segments.interest_metrics
+ALTER month_year TYPE DATE USING month_year::DATE;*/
+      
+SELECT month_year, COUNT (*) AS record_count
+FROM fresh_segments.interest_metrics as im
+GROUP BY month_year
+ORDER BY month_year NULLS FIRST;
+
+DELETE FROM fresh_segments.interest_metrics
+WHERE interest_id IS NULL;
+
+SELECT 
+  COUNT(DISTINCT imap.id) AS map_id_count,
+  COUNT(DISTINCT imetrics.interest_id) AS metrics_id_count,
+  SUM(CASE WHEN imap.id is NULL THEN 1 END) AS not_in_metric,
+  SUM(CASE WHEN imetrics.interest_id is NULL THEN 1 END) AS not_in_map
+FROM fresh_segments.interest_map AS imap
+FULL OUTER JOIN fresh_segments.interest_metrics AS imetrics
+  ON imetrics.interest_id = imap.id;
